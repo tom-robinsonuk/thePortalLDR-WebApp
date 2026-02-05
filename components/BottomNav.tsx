@@ -17,7 +17,7 @@ const navItems: NavItem[] = [
     { href: '/mood', icon: <Smile className="w-5 h-5" />, label: 'Mood' },
     { href: '/draw', icon: <PenTool className="w-5 h-5" />, label: 'Draw' },
     { href: '#', icon: <Sparkles className="w-5 h-5" />, label: 'Play', disabled: true },
-    { href: '#', icon: <Star className="w-5 h-5" />, label: 'Stars', disabled: true },
+    { href: '/stars', icon: <Star className="w-5 h-5" />, label: 'Stars' },
 ];
 
 export default function BottomNav() {
