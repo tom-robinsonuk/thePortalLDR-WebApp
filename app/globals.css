@@ -1,0 +1,195 @@
+@import url('https://fonts.googleapis.com/css2?family=Quicksand:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ============================================
+   The Portal - Global CSS
+   Pastel Kawaii Theme
+   ============================================ */
+
+:root {
+  /* Primary Palette */
+  --portal-pink: #FFD1DC;
+  --portal-cream: #FFF5E1;
+  --portal-purple: #E0BBE4;
+  --portal-sky: #B2E2F2;
+  
+  /* Dark Variants */
+  --portal-pink-dark: #FFB3C6;
+  --portal-purple-dark: #C9A0D3;
+  
+  /* Text Colors */
+  --text-primary: #5D5A6D;
+  --text-secondary: #8B8797;
+  --text-light: #FFFFFF;
+  
+  /* Gradient Backgrounds */
+  --gradient-main: linear-gradient(135deg, var(--portal-pink) 0%, var(--portal-cream) 50%, var(--portal-purple) 100%);
+  --gradient-sky: linear-gradient(180deg, var(--portal-sky) 0%, var(--portal-cream) 100%);
+  
+  /* Shadows - Soft & Dreamy */
+  --shadow-soft: 0 4px 20px rgba(224, 187, 228, 0.3);
+  --shadow-card: 0 8px 32px rgba(255, 209, 220, 0.25);
+  --shadow-float: 0 12px 40px rgba(178, 226, 242, 0.3);
+  
+  /* Spacing */
+  --space-xs: 0.25rem;
+  --space-sm: 0.5rem;
+  --space-md: 1rem;
+  --space-lg: 1.5rem;
+  --space-xl: 2rem;
+  --space-2xl: 3rem;
+  
+  /* Border Radius - Squishy! */
+  --radius-sm: 0.75rem;
+  --radius-md: 1rem;
+  --radius-lg: 1.5rem;
+  --radius-xl: 2rem;
+  --radius-full: 9999px;
+}
+
+/* Base Styles */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  font-family: 'Quicksand', system-ui, sans-serif;
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--gradient-main);
+  min-height: 100vh;
+  color: var(--text-primary);
+  line-height: 1.6;
+  font-weight: 500;
+}
+
+/* Typography */
+h1, h2, h3, h4, h5, h6 {
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* ============================================
+   Component Classes - Kawaii Style
+   ============================================ */
+
+/* Glass Card Effect */
+.glass-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid rgba(255, 255, 255, 0.8);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-card);
+}
+
+/* Squishy Button */
+.btn-squishy {
+  background: var(--portal-pink);
+  color: var(--text-primary);
+  padding: var(--space-md) var(--space-xl);
+  border-radius: var(--radius-full);
+  font-weight: 600;
+  border: none;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  box-shadow: var(--shadow-soft);
+}
+
+.btn-squishy:hover {
+  transform: scale(1.05);
+  box-shadow: var(--shadow-float);
+}
+
+.btn-squishy:active {
+  transform: scale(0.95);
+}
+
+/* Float Animation */
+@keyframes float {
+  0%, 100% { transform: translateY(0px); }
+  50% { transform: translateY(-10px); }
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Bounce Animation */
+@keyframes bounce-soft {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+
+.animate-bounce-soft {
+  animation: bounce-soft 1.5s ease-in-out infinite;
+}
+
+/* Wiggle Animation - for cute interactions */
+@keyframes wiggle {
+  0%, 100% { transform: rotate(0deg); }
+  25% { transform: rotate(-5deg); }
+  75% { transform: rotate(5deg); }
+}
+
+.animate-wiggle {
+  animation: wiggle 0.5s ease-in-out;
+}
+
+/* Heart Pulse Animation */
+@keyframes heart-pulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.1); }
+}
+
+.animate-heart {
+  animation: heart-pulse 0.8s ease-in-out infinite;
+}
+
+/* Mobile-first responsive container */
+.portal-container {
+  width: 100%;
+  max-width: 430px;
+  margin: 0 auto;
+  padding: var(--space-md);
+}
+
+/* Safe area for mobile notches */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .portal-container {
+    padding-top: env(safe-area-inset-top);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--portal-cream);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--portal-pink);
+  border-radius: var(--radius-full);
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--portal-pink-dark);
+}
+
+/* Selection Color */
+::selection {
+  background: var(--portal-purple);
+  color: var(--text-primary);
+}
