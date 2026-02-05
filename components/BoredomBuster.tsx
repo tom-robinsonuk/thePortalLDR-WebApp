@@ -21,6 +21,23 @@ export default function BoredomBuster() {
         return filteredPrompts[randomIndex];
     }, []);
 
+    // Get specific daily factor for "Fact Drop"
+    const getDailyFact = useCallback(() => {
+        const facts = prompts.filter(p => p.category === 'daily_fact');
+        if (facts.length === 0) return null;
+
+        // Calculate Day of Year (1-366)
+        const now = new Date();
+        const start = new Date(now.getFullYear(), 0, 0);
+        const diff = now.getTime() - start.getTime();
+        const oneDay = 1000 * 60 * 60 * 24;
+        const dayOfYear = Math.floor(diff / oneDay);
+
+        // Use day of year to select consistent fact
+        const factIndex = dayOfYear % facts.length;
+        return facts[factIndex];
+    }, []);
+
     // Handle category button click - select from that category only
     const handleCategoryClick = async (categoryId: CategoryId) => {
         setIsShuffling(true);
@@ -28,7 +45,14 @@ export default function BoredomBuster() {
 
         await new Promise(resolve => setTimeout(resolve, 800));
 
-        const prompt = getRandomPrompt(categoryId);
+        let prompt: Prompt | null;
+
+        if (categoryId === 'daily_fact') {
+            prompt = getDailyFact();
+        } else {
+            prompt = getRandomPrompt(categoryId);
+        }
+
         setCurrentPrompt(prompt);
         setIsShuffling(false);
         setShowCard(true);
@@ -41,6 +65,9 @@ export default function BoredomBuster() {
 
         await new Promise(resolve => setTimeout(resolve, 1000));
 
+        // For shuffle all, we exclude daily facts to keep them special? 
+        // Or include them randomly? User didn't specify. 
+        // Let's include them randomly for chaos fun.
         const prompt = getRandomPrompt();
         setCurrentPrompt(prompt);
         setIsShuffling(false);

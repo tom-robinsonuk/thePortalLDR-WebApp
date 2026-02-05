@@ -267,13 +267,52 @@ function ViewStarModal({
 function TwinklingStars() {
     const [starPositions, setStarPositions] = useState<Array<{ left: number; top: number; duration: number; delay: number }>>([]);
 
-    // Generate random positions only on client mount
+    // Seeded random number generator (Mulberry32)
+    const seededRandom = (seed: number) => {
+        return () => {
+            let t = seed += 0x6D2B79F5;
+            t = Math.imul(t ^ (t >>> 15), t | 1);
+            t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+            return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+        };
+    };
+
+    // Generate seeded hash from string
+    const cyrb128 = (str: string) => {
+        let h1 = 1779033703, h2 = 3144134277,
+            h3 = 1013904242, h4 = 2773480762;
+        for (let i = 0, k; i < str.length; i++) {
+            k = str.charCodeAt(i);
+            h1 = h2 ^ Math.imul(h1 ^ k, 597399067);
+            h2 = h3 ^ Math.imul(h2 ^ k, 2869860233);
+            h3 = h4 ^ Math.imul(h3 ^ k, 951274213);
+            h4 = h1 ^ Math.imul(h4 ^ k, 2716044179);
+        }
+        h1 = Math.imul(h3 ^ (h1 >>> 18), 597399067);
+        h2 = Math.imul(h4 ^ (h2 >>> 22), 2869860233);
+        h3 = Math.imul(h1 ^ (h3 >>> 17), 951274213);
+        h4 = Math.imul(h2 ^ (h4 >>> 19), 2716044179);
+        return (h1 ^ h2 ^ h3 ^ h4) >>> 0;
+    };
+
+    // Generate random positions using "Halfway Point" seed
     useEffect(() => {
+        // "Halfway Point" Logic
+        // Combine Today's Date + My City Lat + Her City Lat -> Unique Seed for "Us"
+        const today = new Date().toISOString().split('T')[0]; // YYYY-MM-DD
+        const myCityLat = 7.0084;   // Hat Yai (Songkhla)
+        const herCityLat = 51.5074; // London
+        const seedString = `${today}-${myCityLat + herCityLat}-stargazing-v1`;
+
+        const seed = cyrb128(seedString);
+        const random = seededRandom(seed);
+
+        // Generate 50 consistent stars based on the seed
         const positions = [...Array(50)].map(() => ({
-            left: Math.random() * 100,
-            top: Math.random() * 100,
-            duration: 2 + Math.random() * 3,
-            delay: Math.random() * 2,
+            left: random() * 100,
+            top: random() * 100,
+            duration: 2 + random() * 3,
+            delay: random() * 2,
         }));
         setStarPositions(positions);
     }, []);
