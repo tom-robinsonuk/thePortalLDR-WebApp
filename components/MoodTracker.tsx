@@ -2,10 +2,11 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { createClient } from '@/utils/supabase/client';
 import TeddyBearEmoji, { moodConfig } from './TeddyBearEmoji';
 import { useUser } from '@/context/UserContext';
-import { supabase, isSupabaseConfigured, MoodType, MoodRecord } from '@/lib/supabase';
-import { setMood as setLocalMood, getUserMood } from '@/lib/moodStore';
+import { MoodType, MoodRecord } from '@/lib/supabase';
+import { setMood as setLocalMood, getUserMood } from '@/lib/moodStore'; // Keep local for offline support/fallback if desired
 import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 interface MoodTrackerProps {
@@ -23,33 +24,24 @@ export default function MoodTracker({ userId, partnerId }: MoodTrackerProps) {
     const [isSaving, setIsSaving] = useState(false);
     const sliderRef = useRef<HTMLDivElement>(null);
 
+    const supabase = createClient();
+
     // Fetch initial moods
     useEffect(() => {
         async function fetchMoods() {
-            if (!isSupabaseConfigured || !supabase) {
-                const storedMyMood = getUserMood(userId);
-                const storedPartnerMood = getUserMood(partnerId);
-                if (storedMyMood) setMyMood(storedMyMood);
-                if (storedPartnerMood) setPartnerMood(storedPartnerMood);
-                setIsLoading(false);
-                return;
-            }
-
             try {
+                // Try fetching from real DB first
                 const { data, error } = await supabase
                     .from('moods')
                     .select('*')
                     .in('user_id', [userId, partnerId]);
 
-                if (error) {
-                    console.error('Error fetching moods:', error);
-                    return;
+                if (!error && data) {
+                    data.forEach((record: MoodRecord) => {
+                        if (record.user_id === userId) setMyMood(record.mood as MoodType);
+                        else if (record.user_id === partnerId) setPartnerMood(record.mood as MoodType);
+                    });
                 }
-
-                data?.forEach((record: MoodRecord) => {
-                    if (record.user_id === userId) setMyMood(record.mood);
-                    else if (record.user_id === partnerId) setPartnerMood(record.mood);
-                });
             } catch (err) {
                 console.error('Error:', err);
             } finally {
@@ -58,23 +50,21 @@ export default function MoodTracker({ userId, partnerId }: MoodTrackerProps) {
         }
 
         fetchMoods();
-    }, [userId, partnerId]);
+    }, [userId, partnerId, supabase]);
 
     // Subscribe to realtime updates
     useEffect(() => {
-        if (!isSupabaseConfigured || !supabase) return;
-
         const channel = supabase
             .channel('moods-realtime')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'moods' }, (payload) => {
                 const record = payload.new as MoodRecord;
-                if (record.user_id === userId) setMyMood(record.mood);
-                else if (record.user_id === partnerId) setPartnerMood(record.mood);
+                if (record.user_id === userId) setMyMood(record.mood as MoodType);
+                else if (record.user_id === partnerId) setPartnerMood(record.mood as MoodType);
             })
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
-    }, [userId, partnerId]);
+    }, [userId, partnerId, supabase]);
 
     // Update mood
     const handleMoodSelect = async (mood: MoodType) => {
@@ -82,12 +72,6 @@ export default function MoodTracker({ userId, partnerId }: MoodTrackerProps) {
 
         setIsSaving(true);
         setMyMood(mood);
-
-        if (!isSupabaseConfigured || !supabase) {
-            setLocalMood(userId, mood);
-            setIsSaving(false);
-            return;
-        }
 
         try {
             const { error } = await supabase
@@ -124,15 +108,6 @@ export default function MoodTracker({ userId, partnerId }: MoodTrackerProps) {
 
     return (
         <div className="space-y-6">
-            {/* Demo Mode Banner */}
-            {!isSupabaseConfigured && (
-                <motion.div className="bg-portal-purple/20 rounded-2xl p-3 text-center text-sm" initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }}>
-                    <span className="text-[var(--text-secondary)]">
-                        ✨ Demo Mode - <span className="text-[var(--text-primary)]">Set up Supabase for realtime sync!</span>
-                    </span>
-                </motion.div>
-            )}
-
             {/* My Mood Section */}
             <motion.div className="glass-card p-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
                 <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4 text-center">

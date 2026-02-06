@@ -2,8 +2,11 @@
 
 import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, Save, Clock, Calendar, User, Heart } from 'lucide-react';
+import { X, Save, Clock, Calendar, User, Heart, LogOut } from 'lucide-react';
 import { useUser } from '@/context/UserContext';
+import { createClient } from '@/utils/supabase/client';
+import { useRouter } from 'next/navigation';
+import { useAuthUser } from '@/hooks/useAuthUser';
 
 interface SettingsModalProps {
     isOpen: boolean;
@@ -12,11 +15,19 @@ interface SettingsModalProps {
 
 export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     const { userName, partnerName, partnerTimezone, meetDate, updateSettings } = useUser();
+    const { user } = useAuthUser(); // Get auth user for ID
+    const router = useRouter();
+    const supabase = createClient();
+
+    const handleLogout = async () => {
+        await supabase.auth.signOut();
+        router.refresh();
+        router.push('/login');
+    };
 
     // Local state for form inputs
     const [formData, setFormData] = useState({
         userName,
-        partnerName,
         partnerTimezone,
         meetDate,
     });
@@ -24,12 +35,24 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
     // Sync local state when context changes or modal opens
     useEffect(() => {
         if (isOpen) {
-            setFormData({ userName, partnerName, partnerTimezone, meetDate });
+            setFormData({ userName, partnerTimezone, meetDate });
         }
-    }, [isOpen, userName, partnerName, partnerTimezone, meetDate]);
+    }, [isOpen, userName, partnerTimezone, meetDate]);
 
-    const handleSave = () => {
+    const handleSave = async () => {
+        // 1. Update Context (Optimistic)
         updateSettings(formData);
+
+        // 2. Update Database (Async)
+        if (user) {
+            const { error } = await supabase
+                .from('profiles')
+                .update({ full_name: formData.userName })
+                .eq('id', user.id);
+
+            if (error) console.error('Error saving name:', error);
+        }
+
         onClose();
     };
 
@@ -108,13 +131,10 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                                         </div>
                                         <div className="space-y-1">
                                             <label className="text-xs text-[var(--text-secondary)] ml-1">Partner</label>
-                                            <input
-                                                type="text"
-                                                value={formData.partnerName}
-                                                onChange={(e) => setFormData({ ...formData, partnerName: e.target.value })}
-                                                className="w-full bg-white border-2 border-portal-purple/20 rounded-xl px-3 py-2 text-[var(--text-primary)] focus:border-portal-purple focus:outline-none transition-colors text-sm"
-                                                placeholder="Cutie"
-                                            />
+                                            <div className="w-full bg-gray-50 border-2 border-gray-100 rounded-xl px-3 py-2 text-gray-500 text-sm cursor-not-allowed flex items-center justify-between">
+                                                <span>{partnerName}</span>
+                                                <span className="text-[10px] bg-portal-purple/20 text-portal-purple px-1.5 py-0.5 rounded-md">Linked</span>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>
@@ -165,7 +185,16 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                             </div>
 
                             {/* Footer */}
-                            <div className="mt-6 flex justify-end relative z-10">
+                            <div className="mt-6 flex justify-between items-center relative z-10">
+                                <motion.button
+                                    whileHover={{ scale: 1.05 }}
+                                    whileTap={{ scale: 0.95 }}
+                                    onClick={handleLogout}
+                                    className="px-4 py-2 rounded-xl font-medium text-red-400 hover:text-red-500 hover:bg-red-50 transition-colors flex items-center gap-2 text-sm"
+                                >
+                                    <LogOut className="w-4 h-4" /> Log Out
+                                </motion.button>
+
                                 <motion.button
                                     whileHover={{ scale: 1.05 }}
                                     whileTap={{ scale: 0.95 }}
@@ -182,3 +211,4 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         </AnimatePresence>
     );
 }
+

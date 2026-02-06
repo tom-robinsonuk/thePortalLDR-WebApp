@@ -5,7 +5,8 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { Eraser, Trash2, ArrowLeft, Sparkles, Save, History, X } from 'lucide-react';
 import { saveDrawing, getDrawings, deleteDrawing, SavedDrawing } from '@/lib/drawingStore';
 import Link from 'next/link';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
+import { isSupabaseConfigured } from '@/lib/supabase';
 
 // Pastel color palette
 const COLORS = {
@@ -42,6 +43,7 @@ export default function DrawingCanvas() {
     const [showHistory, setShowHistory] = useState(false);
     const [selectedDrawing, setSelectedDrawing] = useState<SavedDrawing | null>(null);
     const lastPointRef = useRef<Point | null>(null);
+    const supabase = isSupabaseConfigured ? createClient() : null;
 
     // Resize canvas to fill screen
     useEffect(() => {

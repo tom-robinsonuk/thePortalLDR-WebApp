@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
 import Link from 'next/link';
 import { useUser } from '@/context/UserContext';
-import { supabase, isSupabaseConfigured, MoodType, MoodRecord } from '@/lib/supabase';
-import { getUserMood } from '@/lib/moodStore';
+import { createClient } from '@/utils/supabase/client';
+import { MoodType, MoodRecord } from '@/lib/supabase';
+import { getUserMood } from '@/lib/moodStore'; // Fallback
 import { moodConfig } from './TeddyBearEmoji';
 
 // Mood emojis for mini display
@@ -31,7 +32,30 @@ const moodColors: Record<MoodType, string> = {
     busy: 'bg-gray-100',
 };
 
-// Floating speech bubble
+// ... (No changes to SVG helpers)
+
+// SVG Accessories
+function SleepingCap() {
+    return (
+        <svg viewBox="0 0 100 100" className="absolute top-0 left-0 w-full h-full pointer-events-none">
+            <path d="M 30 15 Q 15 35 25 50 L 75 50 Q 85 35 70 15 L 50 5 Z" fill="#B4A7D6" stroke="#5D5A6D" strokeWidth="2" />
+            <circle cx="50" cy="5" r="6" fill="white" stroke="#5D5A6D" strokeWidth="2" />
+            <rect x="25" y="45" width="50" height="8" rx="4" fill="white" stroke="#5D5A6D" strokeWidth="1" />
+        </svg>
+    );
+}
+
+function Sunglasses() {
+    return (
+        <svg viewBox="0 0 100 100" className="absolute top-0 left-0 w-full h-full pointer-events-none">
+            <path d="M 25 40 Q 35 40 45 45 L 55 45 Q 65 40 75 40 L 80 38 L 80 50 Q 70 58 55 50 L 45 50 Q 30 58 20 50 L 20 38 Z" fill="#333" />
+            <line x1="20" y1="40" x2="10" y2="35" stroke="#333" strokeWidth="3" />
+            <line x1="80" y1="40" x2="90" y2="35" stroke="#333" strokeWidth="3" />
+            <line x1="45" y1="45" x2="55" y2="45" stroke="#333" strokeWidth="2" />
+        </svg>
+    );
+}
+
 function MoodBubble({ mood, position }: { mood: MoodType; position: 'left' | 'right' }) {
     const config = moodConfig[mood];
 
@@ -53,28 +77,6 @@ function MoodBubble({ mood, position }: { mood: MoodType; position: 'left' | 'ri
                 style={{ backgroundColor: `${config.color}40` }}
             />
         </motion.div>
-    );
-}
-
-// SVG Accessories
-function SleepingCap() {
-    return (
-        <svg viewBox="0 0 100 100" className="absolute top-0 left-0 w-full h-full pointer-events-none">
-            <path d="M 30 15 Q 15 35 25 50 L 75 50 Q 85 35 70 15 L 50 5 Z" fill="#B4A7D6" stroke="#5D5A6D" strokeWidth="2" />
-            <circle cx="50" cy="5" r="6" fill="white" stroke="#5D5A6D" strokeWidth="2" />
-            <rect x="25" y="45" width="50" height="8" rx="4" fill="white" stroke="#5D5A6D" strokeWidth="1" />
-        </svg>
-    );
-}
-
-function Sunglasses() {
-    return (
-        <svg viewBox="0 0 100 100" className="absolute top-0 left-0 w-full h-full pointer-events-none">
-            <path d="M 25 40 Q 35 40 45 45 L 55 45 Q 65 40 75 40 L 80 38 L 80 50 Q 70 58 55 50 L 45 50 Q 30 58 20 50 L 20 38 Z" fill="#333" />
-            <line x1="20" y1="40" x2="10" y2="35" stroke="#333" strokeWidth="3" />
-            <line x1="80" y1="40" x2="90" y2="35" stroke="#333" strokeWidth="3" />
-            <line x1="45" y1="45" x2="55" y2="45" stroke="#333" strokeWidth="2" />
-        </svg>
     );
 }
 
@@ -141,6 +143,8 @@ export default function MiniMoodDisplay({ userId, partnerId }: MiniMoodDisplayPr
     const [isPartnerAsleep, setIsPartnerAsleep] = useState(false);
     const [isPartnerCool, setIsPartnerCool] = useState(false);
 
+    const supabase = createClient();
+
     // Calculate Partner's time status
     useEffect(() => {
         const checkPartnerTime = () => {
@@ -158,12 +162,7 @@ export default function MiniMoodDisplay({ userId, partnerId }: MiniMoodDisplayPr
                 setIsPartnerCool(false);
             } else {
                 setIsPartnerAsleep(false);
-                // Sunglasses logic: "Day" (e.g., 11 AM - 3 PM maybe? or just general day?)
-                // User said "If time is Day: Show the Bear wearing Sunglasses"
-                // Let's assume Day is 07:00 to 22:00, but maybe sunglasses specifically for mid-day?
-                // Let's just make them "Cool" if it's not sleeping for now, or match specific sunny hours like 10-16.
-                // Re-reading prompt: "If time is Day: Show the Bear wearing Sunglasses."
-                // I'll set Cool for 10:00 - 16:00
+                // Cool for 10:00 - 16:00
                 if (partnerHour >= 10 && partnerHour <= 16) {
                     setIsPartnerCool(true);
                 } else {
@@ -177,43 +176,22 @@ export default function MiniMoodDisplay({ userId, partnerId }: MiniMoodDisplayPr
         return () => clearInterval(interval);
     }, [partnerTimezone]);
 
-    // Fetch moods on mount and listen for updates
-    useEffect(() => {
-        function loadMoods() {
-            if (!isSupabaseConfigured) {
-                const storedMyMood = getUserMood(userId);
-                const storedPartnerMood = getUserMood(partnerId);
-                setMyMood(storedMyMood);
-                setPartnerMood(storedPartnerMood);
-            }
-        }
-
-        loadMoods();
-
-        const handleMoodUpdate = () => loadMoods();
-        window.addEventListener('moodUpdated', handleMoodUpdate);
-        window.addEventListener('focus', handleMoodUpdate);
-
-        return () => {
-            window.removeEventListener('moodUpdated', handleMoodUpdate);
-            window.removeEventListener('focus', handleMoodUpdate);
-        };
-    }, [userId, partnerId]);
-
     // Supabase realtime subscription
     useEffect(() => {
-        if (!isSupabaseConfigured || !supabase) return;
-
         async function fetchMoods() {
-            const { data } = await supabase!
-                .from('moods')
-                .select('*')
-                .in('user_id', [userId, partnerId]);
+            try {
+                const { data } = await supabase
+                    .from('moods')
+                    .select('*')
+                    .in('user_id', [userId, partnerId]);
 
-            data?.forEach((record: MoodRecord) => {
-                if (record.user_id === userId) setMyMood(record.mood);
-                else if (record.user_id === partnerId) setPartnerMood(record.mood);
-            });
+                data?.forEach((record: MoodRecord) => {
+                    if (record.user_id === userId) setMyMood(record.mood as MoodType);
+                    else if (record.user_id === partnerId) setPartnerMood(record.mood as MoodType);
+                });
+            } catch (e) {
+                console.error("Fetch moods failed", e);
+            }
         }
 
         fetchMoods();
@@ -222,13 +200,13 @@ export default function MiniMoodDisplay({ userId, partnerId }: MiniMoodDisplayPr
             .channel('mini-moods')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'moods' }, (payload) => {
                 const record = payload.new as MoodRecord;
-                if (record.user_id === userId) setMyMood(record.mood);
-                else if (record.user_id === partnerId) setPartnerMood(record.mood);
+                if (record.user_id === userId) setMyMood(record.mood as MoodType);
+                else if (record.user_id === partnerId) setPartnerMood(record.mood as MoodType);
             })
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
-    }, [userId, partnerId]);
+    }, [userId, partnerId, supabase]);
 
     const neitherHasMood = !myMood && !partnerMood;
 
