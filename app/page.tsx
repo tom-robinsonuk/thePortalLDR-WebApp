@@ -8,6 +8,7 @@ import TeddyCouple from '@/components/TeddyCouple';
 import BoredomBuster from '@/components/BoredomBuster';
 import BottomNav from '@/components/BottomNav';
 import HugCountdown from '@/components/HugCountdown';
+import PokeButton from '@/components/PokeButton';
 
 export default function Home() {
     const [isMounted, setIsMounted] = useState(false);
@@ -59,6 +60,9 @@ export default function Home() {
 
                 {/* Hug Countdown Dashboard */}
                 <HugCountdown />
+
+                {/* Poke Button */}
+                <PokeButton userId={userId} partnerId={partnerId} />
 
                 {/* Mini Mood Status Display */}
                 <MiniMoodDisplay userId={userId} partnerId={partnerId} />

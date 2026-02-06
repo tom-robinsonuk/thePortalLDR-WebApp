@@ -40,7 +40,7 @@ function MoodBubble({ mood, position }: { mood: MoodType; position: 'left' | 'ri
             initial={{ opacity: 0, y: 10, scale: 0.8 }}
             animate={{ opacity: 1, y: 0, scale: 1 }}
             className={`
-        absolute -top-8 ${position === 'left' ? '-left-2' : '-right-2'}
+        absolute -top-2 ${position === 'left' ? '-left-2' : '-right-2'}
         px-2 py-1 rounded-xl text-xs font-medium
         shadow-sm whitespace-nowrap
       `}
