@@ -66,7 +66,6 @@ export default function BoredomBuster() {
         await new Promise(resolve => setTimeout(resolve, 1000));
 
         // For shuffle all, we exclude daily facts to keep them special? 
-        // Or include them randomly? User didn't specify. 
         // Let's include them randomly for chaos fun.
         const prompt = getRandomPrompt();
         setCurrentPrompt(prompt);

@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import './globals.css';
+import { UserProvider } from '@/context/UserContext';
 
 export const metadata: Metadata = {
     title: 'The Portal 💕 Arty & Me',
@@ -25,7 +26,9 @@ export default function RootLayout({
     return (
         <html lang="en" suppressHydrationWarning>
             <body className="antialiased">
-                {children}
+                <UserProvider>
+                    {children}
+                </UserProvider>
             </body>
         </html>
     );

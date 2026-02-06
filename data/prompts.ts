@@ -59,10 +59,10 @@ export const categories = [
     { id: 'questions', label: 'Questions', emoji: '💬', color: 'bg-portal-pink' },
     { id: 'missions', label: 'Missions', emoji: '🎯', color: 'bg-portal-sky' },
     { id: 'truthdare', label: 'Truth/Dare', emoji: '🎲', color: 'bg-portal-purple' },
-    { id: 'flirty', label: 'Flirty', emoji: '😘', color: 'bg-pink-400' },
-    { id: 'what_if', label: 'What If?', emoji: '🤔', color: 'bg-teal-400' },
-    { id: 'would_you_rather', label: 'Would You Rather', emoji: '⚖️', color: 'bg-orange-400' },
-    { id: 'daily_fact', label: 'Fact Drop', emoji: '🧠', color: 'bg-blue-500' },
+    { id: 'flirty', label: 'Flirty', emoji: '😘', color: 'bg-rose-200' },
+    { id: 'what_if', label: 'What If?', emoji: '🤔', color: 'bg-teal-200' },
+    { id: 'would_you_rather', label: 'Would You Rather', emoji: '⚖️', color: 'bg-orange-200' },
+    { id: 'daily_fact', label: 'Fact Drop', emoji: '🧠', color: 'bg-indigo-200' },
 ] as const;
 
 export type CategoryId = typeof categories[number]['id'];

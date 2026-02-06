@@ -97,10 +97,6 @@ export default function TeddyCouple() {
                     />
                 </svg>
 
-                {/* Caption */}
-                <p className="text-center text-sm text-[var(--text-secondary)] mt-2 font-medium">
-                    Together, even when apart 💕
-                </p>
             </motion.div>
         </motion.div>
     );

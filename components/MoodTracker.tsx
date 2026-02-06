@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import TeddyBearEmoji, { moodConfig } from './TeddyBearEmoji';
+import { useUser } from '@/context/UserContext';
 import { supabase, isSupabaseConfigured, MoodType, MoodRecord } from '@/lib/supabase';
 import { setMood as setLocalMood, getUserMood } from '@/lib/moodStore';
 import { ChevronLeft, ChevronRight } from 'lucide-react';
@@ -15,6 +16,7 @@ interface MoodTrackerProps {
 const moods: MoodType[] = ['happy', 'sleepy', 'sad', 'flirty', 'love', 'hungry', 'angry', 'busy'];
 
 export default function MoodTracker({ userId, partnerId }: MoodTrackerProps) {
+    const { partnerName } = useUser();
     const [myMood, setMyMood] = useState<MoodType | null>(null);
     const [partnerMood, setPartnerMood] = useState<MoodType | null>(null);
     const [isLoading, setIsLoading] = useState(true);
@@ -201,7 +203,7 @@ export default function MoodTracker({ userId, partnerId }: MoodTrackerProps) {
             {/* Partner's Mood Section */}
             <motion.div className="glass-card p-6" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4, delay: 0.1 }}>
                 <h2 className="text-lg font-semibold text-[var(--text-primary)] mb-4 text-center">
-                    Cutie is... 💕
+                    {partnerName} is... 💕
                 </h2>
 
                 {partnerMood ? (

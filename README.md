@@ -83,6 +83,7 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 3. **Anti-Boredom Engine** - Gacha-style prompts for Questions, Missions, Truth/Dare
 4. **Stargazing** - Plant memory stars with photos or notes
 5. **Love Tap War** - Competitive tapping game with real-time sync
+6. **Personal Dashboard** - Dynamic names, Sleeping Bear indicator (timezone aware), and Hug Countdown
 
 ---
 
@@ -107,6 +108,7 @@ npm run lint
 ## 💖 Design Philosophy
 
 - **"Milk & Mocha Bear"** style - soft, cute, rounded
+- **"Kawaii Cloud" UI** - Soft, semi-transparent white containers with pill-shaped roundness (`rounded-[2rem]`)
 - **High visuals, low text** - language-free where possible
 - **Mobile-first** - vertical screens, but responsive to iPad/desktop
 - **Real-time sync** - feel connected even when apart

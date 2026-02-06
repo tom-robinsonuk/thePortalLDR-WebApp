@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Zap, Trophy, RotateCcw, Heart } from 'lucide-react';
+import { useUser } from '@/context/UserContext';
 import { supabase, isSupabaseConfigured } from '@/lib/supabase';
 import BottomNav from './BottomNav';
 
@@ -50,6 +51,7 @@ function Confetti() {
 type GameState = 'idle' | 'countdown' | 'playing' | 'finished';
 
 export default function LoveTapWar() {
+    const { userName, partnerName } = useUser();
     const [gameState, setGameState] = useState<GameState>('idle');
     const [countdown, setCountdown] = useState(3);
     const [timeLeft, setTimeLeft] = useState(GAME_DURATION);
@@ -226,7 +228,7 @@ export default function LoveTapWar() {
                         <div className="flex justify-between items-center mb-2">
                             <span className="font-bold text-[var(--text-primary)] flex items-center gap-1">
                                 <Heart className="w-4 h-4 text-pink-400 fill-pink-400" />
-                                Me
+                                {userName}
                             </span>
                             <span className="text-sm font-medium text-pink-500 bg-pink-100 px-2 py-0.5 rounded-full">
                                 {myTaps} 💗
@@ -283,7 +285,7 @@ export default function LoveTapWar() {
                         <div className="flex justify-between items-center mb-2">
                             <span className="font-bold text-[var(--text-primary)] flex items-center gap-1">
                                 <Heart className="w-4 h-4 text-blue-400 fill-blue-400" />
-                                Cutie
+                                {partnerName}
                             </span>
                             <span className="text-sm font-medium text-blue-500 bg-blue-100 px-2 py-0.5 rounded-full">
                                 {partnerTaps} 💙
@@ -407,7 +409,7 @@ export default function LoveTapWar() {
                         <Trophy className="w-20 h-20 mx-auto text-yellow-500 mb-4" />
                         <h2 className="text-3xl font-bold text-[var(--text-primary)] mb-2">
                             {winner === 'me' && '🎉 You Win! 🎉'}
-                            {winner === 'partner' && '💙 Cutie Wins! 💙'}
+                            {winner === 'partner' && `💙 ${partnerName} Wins! 💙`}
                             {winner === 'tie' && "💕 It's a Tie! 💕"}
                         </h2>
                         <motion.p
@@ -416,8 +418,8 @@ export default function LoveTapWar() {
                             animate={{ opacity: 1, y: 0 }}
                             transition={{ delay: 0.3 }}
                         >
-                            {winner === 'me' && "This proves you love her the most! 💖"}
-                            {winner === 'partner' && "Aww, Cutie loves you more! Lucky you~ 💕"}
+                            {winner === 'me' && `This proves you love ${partnerName === 'Cutie' ? 'her' : partnerName} the most! 💖`}
+                            {winner === 'partner' && `Aww, ${partnerName} loves you more! Lucky you~ 💕`}
                             {winner === 'tie' && "You both love each other equally! 🥰"}
                         </motion.p>
                         <p className="text-sm text-[var(--text-secondary)] mb-6">
