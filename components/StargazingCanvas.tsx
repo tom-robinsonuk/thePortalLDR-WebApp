@@ -3,8 +3,19 @@
 import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { X, Camera, FileText, Sparkles, Trash2 } from 'lucide-react';
-import { getStars, addStar, deleteStar, StarMemory } from '@/lib/starStore';
 import BottomNav from './BottomNav';
+import { createClient } from '@/utils/supabase/client';
+import { useAuthUser } from '@/hooks/useAuthUser';
+
+interface StarMemory {
+    id: string;
+    x: number;
+    y: number;
+    message: string | null;
+    image_url: string | null;
+    created_at: string;
+    user_id: string;
+}
 
 // Plant Star Modal
 function PlantStarModal({
@@ -203,11 +214,13 @@ function ViewStarModal({
 }) {
     if (!star) return null;
 
-    const formattedDate = new Date(star.createdAt).toLocaleDateString('en-US', {
+    const formattedDate = new Date(star.created_at).toLocaleDateString('en-US', {
         month: 'short',
         day: 'numeric',
         year: 'numeric'
     });
+
+    const isPhoto = !!star.image_url;
 
     return (
         <motion.div
@@ -231,20 +244,20 @@ function ViewStarModal({
                     </button>
                 </div>
 
-                {star.type === 'photo' ? (
+                {isPhoto ? (
                     <div className="space-y-3">
                         <img
-                            src={star.content}
+                            src={star.image_url!}
                             alt="Memory"
                             className="w-full rounded-xl"
                         />
-                        {star.caption && (
-                            <p className="text-white text-center">{star.caption}</p>
+                        {star.message && (
+                            <p className="text-white text-center">{star.message}</p>
                         )}
                     </div>
                 ) : (
                     <div className="bg-white/10 rounded-xl p-4">
-                        <p className="text-white text-lg leading-relaxed">{star.content}</p>
+                        <p className="text-white text-lg leading-relaxed">{star.message}</p>
                     </div>
                 )}
 
@@ -380,10 +393,58 @@ export default function StargazingCanvas() {
     const [clickPosition, setClickPosition] = useState({ x: 50, y: 50 });
     const [selectedStar, setSelectedStar] = useState<StarMemory | null>(null);
 
-    // Load stars on mount
+    // Supabase
+    const supabase = createClient();
+    const { user } = useAuthUser();
+    const [coupleId, setCoupleId] = useState<string | null>(null);
+
+    // Fetch Couple ID
     useEffect(() => {
-        setStars(getStars());
-    }, []);
+        if (!user) return;
+        const fetchCouple = async () => {
+            const { data } = await supabase
+                .from('profiles')
+                .select('couple_id')
+                .eq('id', user.id)
+                .single();
+            if (data?.couple_id) setCoupleId(data.couple_id);
+        };
+        fetchCouple();
+    }, [user]);
+
+    // Load stars from DB
+    useEffect(() => {
+        if (!coupleId) return;
+
+        const fetchStars = async () => {
+            const { data } = await supabase
+                .from('stars')
+                .select('*')
+                .eq('couple_id', coupleId)
+                .order('created_at', { ascending: true });
+
+            if (data) setStars(data);
+        };
+        fetchStars();
+
+        // Realtime Subscription
+        const channel = supabase.channel('stars-updates')
+            .on('postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'stars', filter: `couple_id=eq.${coupleId}` },
+                (payload) => {
+                    setStars(prev => [...prev, payload.new as StarMemory]);
+                }
+            )
+            .on('postgres_changes',
+                { event: 'DELETE', schema: 'public', table: 'stars' },
+                (payload) => {
+                    setStars(prev => prev.filter(s => s.id !== payload.old.id));
+                }
+            )
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, [coupleId]);
 
     // Handle sky click
     const handleSkyClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
@@ -395,22 +456,73 @@ export default function StargazingCanvas() {
     }, []);
 
     // Handle plant star
-    const handlePlantStar = (type: 'photo' | 'note', content: string, caption?: string) => {
-        const newStar = addStar({
-            x: clickPosition.x,
-            y: clickPosition.y,
-            type,
-            content,
-            caption,
-            createdBy: 'me',
-        });
-        setStars(prev => [...prev, newStar]);
+    const handlePlantStar = async (type: 'photo' | 'note', content: string, caption?: string) => {
+        if (!user || !coupleId) return;
+
+        let imageUrl = null;
+        let message = caption || content; // Default message logic
+
+        // If photo, upload first
+        if (type === 'photo') {
+            // content is Base64 here from the modal, but Supabase Storage needs Blob/File
+            // Convert Base64 to Blob
+            const res = await fetch(content);
+            const blob = await res.blob();
+
+            const filename = `${coupleId}/${Date.now()}-star.png`;
+            const { error: uploadError } = await supabase.storage
+                .from('memories')
+                .upload(filename, blob);
+
+            if (uploadError) {
+                console.error('Star upload failed', uploadError);
+                return;
+            }
+
+            const { data: { publicUrl } } = supabase.storage
+                .from('memories')
+                .getPublicUrl(filename);
+
+            imageUrl = publicUrl;
+            message = caption || ''; // Caption becomes the message
+        } else {
+            // Note
+            message = content;
+        }
+
+        // Insert to DB
+        const { data: newStar, error } = await supabase
+            .from('stars')
+            .insert({
+                user_id: user.id,
+                couple_id: coupleId,
+                x: clickPosition.x,
+                y: clickPosition.y,
+                message: message,
+                image_url: imageUrl
+            })
+            .select() // Return the inserted row
+            .single();
+
+        if (error) {
+            console.error('Plant Star Error:', error);
+        } else if (newStar) {
+            // Optimistically add to state (avoids refresh requirement)
+            setStars(prev => [...prev, newStar as StarMemory]);
+        }
     };
 
     // Handle delete star
-    const handleDeleteStar = (id: string) => {
-        deleteStar(id);
+    const handleDeleteStar = async (id: string) => {
+        // Optimistic delete
         setStars(prev => prev.filter(s => s.id !== id));
+
+        const { error } = await supabase
+            .from('stars')
+            .delete()
+            .eq('id', id);
+
+        if (error) console.error('Delete star error:', error);
     };
 
     return (

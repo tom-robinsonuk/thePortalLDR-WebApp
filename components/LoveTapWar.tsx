@@ -4,8 +4,14 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Zap, Trophy, RotateCcw, Heart } from 'lucide-react';
 import { useUser } from '@/context/UserContext';
-import { supabase, isSupabaseConfigured } from '@/lib/supabase';
+import { createClient } from '@/utils/supabase/client';
+import { useAuthUser } from '@/hooks/useAuthUser';
 import BottomNav from './BottomNav';
+
+interface GameScores {
+    pink_score: number;
+    blue_score: number;
+}
 
 // Game duration in seconds
 const GAME_DURATION = 10;
@@ -61,30 +67,86 @@ export default function LoveTapWar() {
     const [showConfetti, setShowConfetti] = useState(false);
     const timerRef = useRef<NodeJS.Timeout | null>(null);
 
-    // Subscribe to partner taps
+    // Supabase & Scores
+    const supabase = createClient();
+    const { user } = useAuthUser();
+    const [coupleId, setCoupleId] = useState<string | null>(null);
+    const [myColor, setMyColor] = useState<'pink' | 'blue' | null>(null);
+    const [totalScores, setTotalScores] = useState<GameScores>({ pink_score: 0, blue_score: 0 });
+
+    // 1. Setup: Get Couple & Determine Color
     useEffect(() => {
-        if (!isSupabaseConfigured || !supabase) return;
+        if (!user) return;
+        const setupGame = async () => {
+            // Get my profile
+            const { data: profile } = await supabase
+                .from('profiles')
+                .select('couple_id, id')
+                .eq('id', user.id)
+                .single();
+
+            if (profile?.couple_id) {
+                setCoupleId(profile.couple_id);
+
+                // Determining Color: Sort couple user IDs alphabetically
+                // Pink = Lower ID, Blue = Higher ID
+                const { data: partners } = await supabase
+                    .from('profiles')
+                    .select('id')
+                    .eq('couple_id', profile.couple_id)
+                    .order('id', { ascending: true });
+
+                if (partners && partners.length > 0) {
+                    const isFirst = partners[0].id === user.id;
+                    setMyColor(isFirst ? 'pink' : 'blue');
+                }
+
+                // Fetch current scores
+                const { data: scores } = await supabase
+                    .from('game_scores')
+                    .select('*')
+                    .eq('couple_id', profile.couple_id)
+                    .single();
+
+                if (scores) {
+                    setTotalScores({ pink_score: scores.pink_score, blue_score: scores.blue_score });
+                } else {
+                    // Initialize if missing
+                    await supabase.from('game_scores').insert({ couple_id: profile.couple_id });
+                }
+            }
+        };
+        setupGame();
+    }, [user]);
+
+    // 2. Realtime Taps & Game State (Broadcast)
+    useEffect(() => {
+        if (!user || !coupleId) return; // Wait for setup
 
         const channel = supabase
             .channel('tap-war-room')
             .on('broadcast', { event: 'tap' }, ({ payload }) => {
-                if (payload.player === 'partner') {
+                if (payload.from !== user.id) {
                     setPartnerTaps(payload.count);
                 }
             })
-            .on('broadcast', { event: 'game-start' }, () => {
-                // Partner started game
-                startCountdown();
+            .on('broadcast', { event: 'game-start' }, ({ payload }) => {
+                if (payload.from !== user.id) startCountdown();
             })
-            .on('broadcast', { event: 'game-reset' }, () => {
-                resetGame();
+            .on('broadcast', { event: 'game-reset' }, ({ payload }) => {
+                if (payload.from !== user.id) resetGame();
             })
+            // Also listen to Score updates from DB
+            .on('postgres_changes',
+                { event: 'UPDATE', schema: 'public', table: 'game_scores', filter: `couple_id=eq.${coupleId}` },
+                (payload) => {
+                    setTotalScores(payload.new as GameScores);
+                }
+            )
             .subscribe();
 
-        return () => {
-            supabase.removeChannel(channel);
-        };
-    }, []);
+        return () => { supabase.removeChannel(channel); };
+    }, [user, coupleId]);
 
     // Countdown logic
     useEffect(() => {
@@ -125,12 +187,12 @@ export default function LoveTapWar() {
     const handleStart = () => {
         startCountdown();
 
-        // Broadcast game start to partner
-        if (isSupabaseConfigured && supabase) {
+        // Broadcast game start
+        if (supabase) {
             supabase.channel('tap-war-room').send({
                 type: 'broadcast',
                 event: 'game-start',
-                payload: {},
+                payload: { from: user?.id },
             });
         }
     };
@@ -141,22 +203,31 @@ export default function LoveTapWar() {
         const newCount = myTaps + 1;
         setMyTaps(newCount);
 
-        // Broadcast tap to partner
-        if (isSupabaseConfigured && supabase) {
+        // Broadcast tap
+        if (supabase) {
             supabase.channel('tap-war-room').send({
                 type: 'broadcast',
                 event: 'tap',
-                payload: { player: 'me', count: newCount },
+                payload: { from: user?.id, count: newCount },
             });
         }
     };
 
-    const endGame = () => {
+    const endGame = async () => {
         setGameState('finished');
+        if (!myColor || !coupleId) return;
 
         // Determine winner
         if (myTaps > partnerTaps) {
             setWinner('me');
+            // Update DB Score!
+            const updateKey = myColor === 'pink' ? 'pink_score' : 'blue_score';
+            const currentScore = myColor === 'pink' ? totalScores.pink_score : totalScores.blue_score;
+
+            await supabase.from('game_scores')
+                .update({ [updateKey]: currentScore + 1 })
+                .eq('couple_id', coupleId);
+
         } else if (partnerTaps > myTaps) {
             setWinner('partner');
         } else {
@@ -182,12 +253,12 @@ export default function LoveTapWar() {
     const handleReset = () => {
         resetGame();
 
-        // Broadcast reset to partner
-        if (isSupabaseConfigured && supabase) {
+        // Broadcast reset
+        if (supabase) {
             supabase.channel('tap-war-room').send({
                 type: 'broadcast',
                 event: 'game-reset',
-                payload: {},
+                payload: { from: user?.id },
             });
         }
     };
@@ -231,7 +302,7 @@ export default function LoveTapWar() {
                                 {userName}
                             </span>
                             <span className="text-sm font-medium text-pink-500 bg-pink-100 px-2 py-0.5 rounded-full">
-                                {myTaps} 💗
+                                {myTaps} 💗 <span className="text-[10px] text-pink-300 ml-1">({myColor === 'pink' ? totalScores.pink_score : totalScores.blue_score} wins)</span>
                             </span>
                         </div>
                         {/* Liquid progress bar */}
@@ -288,7 +359,7 @@ export default function LoveTapWar() {
                                 {partnerName}
                             </span>
                             <span className="text-sm font-medium text-blue-500 bg-blue-100 px-2 py-0.5 rounded-full">
-                                {partnerTaps} 💙
+                                {partnerTaps} 💙 <span className="text-[10px] text-blue-300 ml-1">({myColor === 'pink' ? totalScores.blue_score : totalScores.pink_score} wins)</span>
                             </span>
                         </div>
                         {/* Liquid progress bar */}
@@ -438,14 +509,7 @@ export default function LoveTapWar() {
                 )}
             </div>
 
-            {/* Demo Mode indicator */}
-            {!isSupabaseConfigured && (
-                <div className="text-center pb-2">
-                    <span className="text-xs text-[var(--text-secondary)] bg-portal-purple/20 px-3 py-1 rounded-full">
-                        ✨ Demo Mode (solo play)
-                    </span>
-                </div>
-            )}
+
 
             {/* Bottom Navigation */}
             <BottomNav />

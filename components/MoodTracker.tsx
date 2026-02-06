@@ -25,6 +25,20 @@ export default function MoodTracker({ userId, partnerId }: MoodTrackerProps) {
     const sliderRef = useRef<HTMLDivElement>(null);
 
     const supabase = createClient();
+    const [coupleId, setCoupleId] = useState<string | null>(null);
+
+    // Fetch Couple ID
+    useEffect(() => {
+        const fetchCouple = async () => {
+            const { data } = await supabase
+                .from('profiles')
+                .select('couple_id')
+                .eq('id', userId)
+                .single();
+            if (data?.couple_id) setCoupleId(data.couple_id);
+        };
+        fetchCouple();
+    }, [userId, supabase]);
 
     // Fetch initial moods
     useEffect(() => {
@@ -74,12 +88,26 @@ export default function MoodTracker({ userId, partnerId }: MoodTrackerProps) {
         setMyMood(mood);
 
         try {
+            const payload: any = {
+                user_id: userId,
+                mood,
+                updated_at: new Date().toISOString()
+            };
+            // Only add couple_id if we have it (we should)
+            if (coupleId) payload.couple_id = coupleId;
+
+            console.log('Attempting to save mood with payload:', payload);
+
             const { error } = await supabase
                 .from('moods')
-                .upsert({ user_id: userId, mood, updated_at: new Date().toISOString() }, { onConflict: 'user_id' });
-            if (error) console.error('Error saving mood:', error);
+                .upsert(payload, { onConflict: 'user_id' });
+
+            if (error) {
+                console.error('Supabase Mood Save Error:', JSON.stringify(error, null, 2));
+                throw error;
+            }
         } catch (err) {
-            console.error('Error:', err);
+            console.error('Full Error Object:', err);
         } finally {
             setIsSaving(false);
         }

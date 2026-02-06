@@ -41,12 +41,12 @@ Open [http://localhost:3000](http://localhost:3000) to see the app.
 Create a `.env.local` file in the root:
 
 ```env
-# Supabase (optional - app works in demo mode without these)
+# Supabase (Required)
 NEXT_PUBLIC_SUPABASE_URL=your-project-url
 NEXT_PUBLIC_SUPABASE_ANON_KEY=your-anon-key
 ```
 
-> Without Supabase credentials, the app runs in **Demo Mode** using localStorage.
+> **Note**: This app relies on Supabase for Authentication, Database, Realtime, and Storage. You must provide valid credentials for features to work.
 
 ---
 

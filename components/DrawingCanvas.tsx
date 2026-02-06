@@ -3,10 +3,16 @@
 import { useRef, useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Eraser, Trash2, ArrowLeft, Sparkles, Save, History, X } from 'lucide-react';
-import { saveDrawing, getDrawings, deleteDrawing, SavedDrawing } from '@/lib/drawingStore';
 import Link from 'next/link';
 import { createClient } from '@/utils/supabase/client';
-import { isSupabaseConfigured } from '@/lib/supabase';
+import { useAuthUser } from '@/hooks/useAuthUser';
+
+interface SavedDrawing {
+    id: string;
+    image_url: string;
+    created_at: string;
+    user_id: string;
+}
 
 // Pastel color palette
 const COLORS = {
@@ -43,7 +49,25 @@ export default function DrawingCanvas() {
     const [showHistory, setShowHistory] = useState(false);
     const [selectedDrawing, setSelectedDrawing] = useState<SavedDrawing | null>(null);
     const lastPointRef = useRef<Point | null>(null);
-    const supabase = isSupabaseConfigured ? createClient() : null;
+
+    // Supabase
+    const supabase = createClient();
+    const { user } = useAuthUser();
+    const [coupleId, setCoupleId] = useState<string | null>(null);
+
+    // Fetch Couple ID
+    useEffect(() => {
+        if (!user) return;
+        const fetchCouple = async () => {
+            const { data } = await supabase
+                .from('profiles')
+                .select('couple_id')
+                .eq('id', user.id)
+                .single();
+            if (data?.couple_id) setCoupleId(data.couple_id);
+        };
+        fetchCouple();
+    }, [user]);
 
     // Resize canvas to fill screen
     useEffect(() => {
@@ -103,7 +127,7 @@ export default function DrawingCanvas() {
 
     // Subscribe to realtime drawing updates
     useEffect(() => {
-        if (!isSupabaseConfigured || !supabase) return;
+        if (!supabase) return;
 
         const channel = supabase
             .channel('drawing-room')
@@ -124,10 +148,35 @@ export default function DrawingCanvas() {
         };
     }, []);
 
-    // Load saved drawings on mount
+    const fetchDrawings = useCallback(async () => {
+        if (!coupleId) return;
+        const { data } = await supabase
+            .from('drawings')
+            .select('*')
+            .eq('couple_id', coupleId)
+            .order('created_at', { ascending: false });
+
+        if (data) setSavedDrawings(data);
+    }, [coupleId, supabase]);
+
+    // Initial Load & Subscribe
     useEffect(() => {
-        setSavedDrawings(getDrawings());
-    }, []);
+        if (!coupleId) return;
+
+        fetchDrawings();
+
+        // Subscribe to new drawings
+        const channel = supabase.channel('drawing-db-updates')
+            .on('postgres_changes',
+                { event: 'INSERT', schema: 'public', table: 'drawings', filter: `couple_id=eq.${coupleId}` },
+                (payload) => {
+                    setSavedDrawings(prev => [payload.new as SavedDrawing, ...prev]);
+                }
+            )
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
+    }, [coupleId]);
 
     // Get coordinates from event
     const getCoordinates = (e: React.MouseEvent | React.TouchEvent): Point | null => {
@@ -212,7 +261,7 @@ export default function DrawingCanvas() {
             setStrokes(prev => [...prev, newStroke]);
 
             // Broadcast to partner
-            if (isSupabaseConfigured && supabase) {
+            if (supabase) {
                 supabase.channel('drawing-room').send({
                     type: 'broadcast',
                     event: 'stroke',
@@ -232,7 +281,7 @@ export default function DrawingCanvas() {
         setTimeout(() => setShowClearAnimation(false), 800);
 
         // Broadcast clear to partner
-        if (isSupabaseConfigured && supabase) {
+        if (supabase) {
             supabase.channel('drawing-room').send({
                 type: 'broadcast',
                 event: 'clear',
@@ -242,25 +291,66 @@ export default function DrawingCanvas() {
     };
 
     // Save current drawing
-    const handleSave = () => {
+    const handleSave = async () => {
         const canvas = canvasRef.current;
-        if (!canvas) return;
+        if (!canvas || !user || !coupleId) return;
 
-        // Export canvas as PNG data URL
-        const dataUrl = canvas.toDataURL('image/png');
-        const newDrawing = saveDrawing(dataUrl);
-        setSavedDrawings(prev => [newDrawing, ...prev]);
-
-        // Show save animation
         setShowSaveAnimation(true);
-        setTimeout(() => setShowSaveAnimation(false), 800);
+
+        // 1. Upload to Storage
+        canvas.toBlob(async (blob) => {
+            if (!blob) return;
+
+            const filename = `${coupleId}/${Date.now()}.png`;
+            const { data: uploadData, error: uploadError } = await supabase.storage
+                .from('memories')
+                .upload(filename, blob);
+
+            if (uploadError) {
+                console.error('Upload failed:', uploadError);
+                return;
+            }
+
+            // 2. Get Public URL
+            const { data: { publicUrl } } = supabase.storage
+                .from('memories')
+                .getPublicUrl(filename);
+
+            // 3. Save to DB
+            const { data: newDrawing, error: dbError } = await supabase
+                .from('drawings')
+                .insert({
+                    user_id: user.id,
+                    couple_id: coupleId,
+                    image_url: publicUrl
+                })
+                .select()
+                .single();
+
+            if (dbError) console.error('DB Save failed:', dbError);
+
+            // Optimistic update handled by realtime subscription usually, 
+            // but we can add it here to be instant if subscription is slow
+            if (newDrawing) {
+                // setSavedDrawings(prev => [newDrawing, ...prev]); // Realtime will handle it
+            }
+
+            setTimeout(() => setShowSaveAnimation(false), 800);
+        });
     };
 
     // Delete a drawing from history
-    const handleDeleteDrawing = (id: string) => {
-        deleteDrawing(id);
+    const handleDeleteDrawing = async (id: string) => {
+        // Optimistic delete
         setSavedDrawings(prev => prev.filter(d => d.id !== id));
         setSelectedDrawing(null);
+
+        const { error } = await supabase
+            .from('drawings')
+            .delete()
+            .eq('id', id);
+
+        if (error) console.error('Delete failed:', error);
     };
 
     return (
@@ -406,7 +496,10 @@ export default function DrawingCanvas() {
 
                     {/* History */}
                     <motion.button
-                        onClick={() => setShowHistory(true)}
+                        onClick={() => {
+                            setShowHistory(true);
+                            fetchDrawings(); // Refresh on open
+                        }}
                         className="w-10 h-10 rounded-full flex items-center justify-center bg-portal-pink/30 hover:bg-portal-pink/50 transition-colors"
                         whileHover={{ scale: 1.08 }}
                         whileTap={{ scale: 0.95 }}
@@ -416,12 +509,7 @@ export default function DrawingCanvas() {
                 </div>
             </motion.div>
 
-            {/* Demo Mode indicator */}
-            {!isSupabaseConfigured && (
-                <div className="absolute top-16 left-1/2 -translate-x-1/2 text-xs text-[var(--text-secondary)] bg-portal-purple/20 px-3 py-1 rounded-full">
-                    ✨ Demo Mode
-                </div>
-            )}
+
 
             {/* History Drawer (Glassmorphism sidebar) */}
             <AnimatePresence>
@@ -484,7 +572,7 @@ export default function DrawingCanvas() {
                                                 whileTap={{ scale: 0.95 }}
                                             >
                                                 <img
-                                                    src={drawing.imageData}
+                                                    src={drawing.image_url}
                                                     alt="Saved drawing"
                                                     className="w-full h-full object-cover"
                                                 />
@@ -518,7 +606,7 @@ export default function DrawingCanvas() {
                             {/* Modal Header */}
                             <div className="flex items-center justify-between mb-3">
                                 <span className="text-sm text-[var(--text-secondary)]">
-                                    {new Date(selectedDrawing.createdAt).toLocaleDateString('en-US', {
+                                    {new Date(selectedDrawing.created_at).toLocaleDateString('en-US', {
                                         month: 'short',
                                         day: 'numeric',
                                         year: 'numeric',
@@ -536,7 +624,7 @@ export default function DrawingCanvas() {
 
                             {/* Drawing Image */}
                             <img
-                                src={selectedDrawing.imageData}
+                                src={selectedDrawing.image_url}
                                 alt="Saved drawing"
                                 className="w-full rounded-xl shadow-inner"
                             />

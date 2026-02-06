@@ -30,9 +30,9 @@ export default function Home() {
     }, []);
 
     // Fetch Profile & Partner
-    const fetchData = async () => {
+    const fetchData = async (showLoading = true) => {
         if (!user) return;
-        setLoading(true);
+        if (showLoading) setLoading(true);
         try {
             // 1. Get My Profile
             console.log('Fetching profile for user:', user.id);
@@ -85,8 +85,27 @@ export default function Home() {
         }
     };
 
+    // Sync DB Data to User Context
     useEffect(() => {
-        if (user) fetchData();
+        if (!user) return;
+
+        fetchData();
+
+        // Subscribe to Profile Changes (Realtime Sync)
+        const channel = supabase
+            .channel('profile-sync')
+            .on('postgres_changes',
+                { event: 'UPDATE', schema: 'public', table: 'profiles' },
+                (payload) => {
+                    // Refresh data if ANY profile changes (simple & robust)
+                    // We can rely on RLS to ensure we only receive relevant updates anyway
+                    console.log('Realtime Profile Update:', payload);
+                    fetchData(false);
+                }
+            )
+            .subscribe();
+
+        return () => { supabase.removeChannel(channel); };
     }, [user, supabase]);
 
     // Sync DB Data to User Context
@@ -97,9 +116,12 @@ export default function Home() {
             if (profile?.full_name || profile?.username) {
                 updates.userName = profile.full_name || profile.username;
             }
-            // Partner Name
             if (partner?.full_name || partner?.username) {
                 updates.partnerName = partner.full_name || partner.username;
+            }
+            // Sync Meet Date if present in profile
+            if (profile?.meet_date) {
+                updates.meetDate = profile.meet_date;
             }
 
             if (Object.keys(updates).length > 0) {
@@ -125,7 +147,7 @@ export default function Home() {
     // 🔒 PAIRING GATE
     // If we have a user but no couple_id, show pairing screen
     if (user && profile && !profile.couple_id) {
-        return <PairingSystem onPaired={fetchData} />;
+        return <PairingSystem onPaired={() => fetchData(true)} />;
     }
 
     // If fully authenticated and paired (or waiting for partner data fallback)

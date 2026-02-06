@@ -47,10 +47,13 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
         if (user) {
             const { error } = await supabase
                 .from('profiles')
-                .update({ full_name: formData.userName })
+                .update({
+                    full_name: formData.userName,
+                    meet_date: formData.meetDate // Save to DB
+                })
                 .eq('id', user.id);
 
-            if (error) console.error('Error saving name:', error);
+            if (error) console.error('Error saving settings:', error);
         }
 
         onClose();
