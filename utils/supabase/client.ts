@@ -1,3 +1,4 @@
+// No change here, I will fix page.tsx instead.
 import { createBrowserClient } from '@supabase/ssr'
 
 export function createClient() {

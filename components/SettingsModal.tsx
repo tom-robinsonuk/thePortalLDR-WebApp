@@ -54,6 +54,18 @@ export default function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
                 .eq('id', user.id);
 
             if (error) console.error('Error saving settings:', error);
+            else {
+                // Broadcast Signal Flare
+                await supabase.channel('room1').send({
+                    type: 'broadcast',
+                    event: 'profile-update',
+                    payload: {
+                        userId: user.id,
+                        meetDate: formData.meetDate, // Optimistic Data
+                        userName: formData.userName
+                    }
+                });
+            }
         }
 
         onClose();

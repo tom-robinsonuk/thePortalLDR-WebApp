@@ -197,11 +197,17 @@ export default function MiniMoodDisplay({ userId, partnerId }: MiniMoodDisplayPr
         fetchMoods();
 
         const channel = supabase
-            .channel('mini-moods')
+            .channel('room1')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'moods' }, (payload) => {
+                console.log('MiniMood Realtime Event:', payload);
                 const record = payload.new as MoodRecord;
                 if (record.user_id === userId) setMyMood(record.mood as MoodType);
                 else if (record.user_id === partnerId) setPartnerMood(record.mood as MoodType);
+            })
+            .on('broadcast', { event: 'mood-update' }, ({ payload }) => {
+                console.log('Broadcast Mood Recieved:', payload);
+                if (payload.userId === userId) setMyMood(payload.mood);
+                else if (payload.userId === partnerId) setPartnerMood(payload.mood);
             })
             .subscribe();
 

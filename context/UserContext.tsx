@@ -50,9 +50,9 @@ export function UserProvider({ children }: { children: React.ReactNode }) {
         }
     }, [settings, isLoaded]);
 
-    const updateSettings = (newSettings: Partial<UserSettings>) => {
+    const updateSettings = React.useCallback((newSettings: Partial<UserSettings>) => {
         setSettings((prev) => ({ ...prev, ...newSettings }));
-    };
+    }, []);
 
     return (
         <UserContext.Provider

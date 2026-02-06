@@ -69,11 +69,15 @@ export default function MoodTracker({ userId, partnerId }: MoodTrackerProps) {
     // Subscribe to realtime updates
     useEffect(() => {
         const channel = supabase
-            .channel('moods-realtime')
+            .channel('room1')
             .on('postgres_changes', { event: '*', schema: 'public', table: 'moods' }, (payload) => {
                 const record = payload.new as MoodRecord;
                 if (record.user_id === userId) setMyMood(record.mood as MoodType);
                 else if (record.user_id === partnerId) setPartnerMood(record.mood as MoodType);
+            })
+            .on('broadcast', { event: 'mood-update' }, ({ payload }) => {
+                if (payload.userId === userId) setMyMood(payload.mood);
+                else if (payload.userId === partnerId) setPartnerMood(payload.mood);
             })
             .subscribe();
 
@@ -106,6 +110,14 @@ export default function MoodTracker({ userId, partnerId }: MoodTrackerProps) {
                 console.error('Supabase Mood Save Error:', JSON.stringify(error, null, 2));
                 throw error;
             }
+
+            // Broadcast Signal Flare for instant UI update
+            await supabase.channel('room1').send({
+                type: 'broadcast',
+                event: 'mood-update',
+                payload: { userId, mood }
+            });
+
         } catch (err) {
             console.error('Full Error Object:', err);
         } finally {

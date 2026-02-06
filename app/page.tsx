@@ -18,7 +18,8 @@ import { useUser } from '@/context/UserContext'; // Import Context Hook
 export default function Home() {
     const { user, loading: authLoading } = useAuthUser();
     const { updateSettings } = useUser(); // Get context updater
-    const supabase = createClient();
+    // Memoize supabase client to prevent re-subscription loops
+    const [supabase] = useState(() => createClient());
 
     const [isMounted, setIsMounted] = useState(false);
     const [loading, setLoading] = useState(true);
@@ -53,7 +54,8 @@ export default function Home() {
                     hint: profileError.hint
                 };
             }
-            setProfile(myProfile);
+            // Prevent Loop: Only update if changed
+            setProfile((prev: any) => JSON.stringify(prev) !== JSON.stringify(myProfile) ? myProfile : prev);
 
             // 2. If Coupled, Get Partner Profile
             if (myProfile?.couple_id) {
@@ -64,7 +66,7 @@ export default function Home() {
                     .neq('id', user.id); // Not me
 
                 if (partners && partners.length > 0) {
-                    setPartner(partners[0]);
+                    setPartner((prev: any) => JSON.stringify(prev) !== JSON.stringify(partners[0]) ? partners[0] : prev);
                 }
             }
         } catch (err: any) {
@@ -93,7 +95,7 @@ export default function Home() {
 
         // Subscribe to Profile Changes (Realtime Sync)
         const channel = supabase
-            .channel('profile-sync')
+            .channel('room1')
             .on('postgres_changes',
                 { event: 'UPDATE', schema: 'public', table: 'profiles' },
                 (payload) => {
@@ -103,10 +105,23 @@ export default function Home() {
                     fetchData(false);
                 }
             )
+            .on('broadcast', { event: 'profile-update' }, ({ payload }) => {
+                console.log('Broadcast Profile Signal:', payload);
+                // 1. Optimistic Update (Instant)
+                const updates: any = {};
+                if (payload.meetDate) updates.meetDate = payload.meetDate;
+                if (payload.userName && payload.userId !== user.id) updates.partnerName = payload.userName;
+                if (payload.userName && payload.userId === user.id) updates.userName = payload.userName;
+
+                if (Object.keys(updates).length > 0) updateSettings(updates);
+
+                // 2. Fetch Source of Truth (Background)
+                fetchData(false);
+            })
             .subscribe();
 
         return () => { supabase.removeChannel(channel); };
-    }, [user, supabase]);
+    }, [user, supabase, updateSettings]);
 
     // Sync DB Data to User Context
     useEffect(() => {
@@ -119,9 +134,14 @@ export default function Home() {
             if (partner?.full_name || partner?.username) {
                 updates.partnerName = partner.full_name || partner.username;
             }
-            // Sync Meet Date if present in profile
-            if (profile?.meet_date) {
+            // Sync Meet Date: If mine is default/missing, use partner's (Shared Date Logic)
+            const DEFAULT_DATE = '2026-04-03';
+            if (profile?.meet_date && profile.meet_date !== DEFAULT_DATE) {
                 updates.meetDate = profile.meet_date;
+            } else if (partner?.meet_date && partner.meet_date !== DEFAULT_DATE) {
+                updates.meetDate = partner.meet_date;
+            } else {
+                updates.meetDate = profile?.meet_date || DEFAULT_DATE;
             }
 
             if (Object.keys(updates).length > 0) {
